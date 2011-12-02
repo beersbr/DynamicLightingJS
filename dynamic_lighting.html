@@ -1,0 +1,316 @@
+<!doctype html>
+<html>
+<head>
+<style>
+#c{
+	border: 1px solid #ccc;
+	background: #333;
+	cursor: none;
+}
+
+</style>
+
+<script>
+/************************************************************
+Created by: Brett Beers 2011
+Title: Dynamic Lighting in 2d
+
+Use this as you want... just give me a high 5
+************************************************************/
+
+
+// this is just for simple type checking
+Error = {
+	checkType: function(caller, func, re_type, ex_type){
+		if(!(re_type instanceof ex_type)){
+			throw(caller.constructor.name+"::"+func+" => Incompatible type "+re_type.constructor.name+". Expected: "+ex_type.name);
+		}
+	}
+}
+
+function Vector2(x, y){
+	this.x = x;
+	this.y = y;
+
+	this.magnitude = Math.sqrt((this.x*this.x) + (this.y*this.y));
+
+	// this is the normalized version of the vector elements, there is no magnitude because by definition the magnitude of a normalized vector is 1
+	this.nx = this.x/this.magnitude;
+	this.ny = this.y/this.magnitude;
+}
+
+// the dot product of two vectors gives you the cosine angle between them.
+function DotProduct2(v1, v2){
+	Error.checkType(this, "DotProduct()", v1, Vector2);
+	Error.checkType(this, "DotProduct()", v2, Vector2);
+
+	var c = ((v1.x*v2.x)+(v1.y*v2.y)) / Math.ceil(v1.magnitude*v2.magnitude);
+	return c;
+}
+
+function Light(p){
+	this.pos = p.pos || new Vector2(0, 0);
+	this.radius = p.radius || 1;
+	this.candle = p.candle || 1;
+
+	this.shine = function(block, render_target){
+		Error.checkType(this, "shine()", block, Block);
+		Error.checkType(this, "shine()", render_target, CanvasRenderingContext2D);
+		
+		// this is where I hold the value of whether an edge is hidden or visible.
+		var edge_status = []; // 0 for hidden : 1 for visible
+
+		for(var i = 0; i < block.verts.length; i++){
+			edge_status[i] = 1;
+
+			//display vertex to lights from each block
+			// render_target.save();
+			// render_target.strokeStyle = "rgba(0, 255, 255, 1)";
+			// render_target.beginPath();
+			// render_target.moveTo(this.pos.x, this.pos.y);
+			// render_target.lineTo(block.verts[i].x, block.verts[i].y);
+			// render_target.stroke();
+			// render_target.restore();
+
+
+			// get the side as a vector
+			var dx = block.verts[i%block.verts.length].x-block.verts[(i+1)%block.verts.length].x;
+			var dy = block.verts[i%block.verts.length].y-block.verts[(i+1)%block.verts.length].y;
+
+			// take the center of the light and get the vector from the vertex to the light
+			var nx = this.pos.x -  block.verts[i%block.verts.length].x;
+			var ny = this.pos.y -  block.verts[i%block.verts.length].y;
+
+			// get surface normal vector or taking the vector at a 90 degree angle so we have a line shooting perpendicular to the edge
+			var tv = new Vector2(-dy, dx); // edge normal
+			var nv = new Vector2(nx, ny);  // ligt vector
+			var dp = DotProduct2(tv, nv);  // the dot product or cosine
+
+			// display normals for edges
+			// render_target.save();
+			// render_target.strokeStyle = "rgba(255, 255, 0, 1)";
+			// render_target.lineWidth = 2;
+			// render_target.beginPath();
+			// render_target.moveTo(block.x, block.y);
+			// render_target.lineTo(tv.x+block.x , tv.y+block.y);
+			// render_target.stroke();
+			// render_target.restore();
+
+			// less than 0 the edge is backfacing
+			if(dp <= 0){
+				edge_status[i] = 0;
+
+				// display visible and hidden edges
+				// render_target.save();
+				// render_target.strokeStyle = "rgba(0, 255, 128, 1)";
+				// render_target.lineWidth = 3;
+				// render_target.beginPath();
+				// render_target.moveTo(block.verts[i].x, block.verts[i].y);
+				// render_target.lineTo(block.verts[(i+1)%block.verts.length].x, block.verts[(i+1)%block.verts.length].y);
+				// render_target.stroke();
+				// render_target.restore();
+			}
+			
+		}
+
+		// display block center to light, which is the vector we use to dotproduct the edge normal
+		// render_target.save();
+		// render_target.strokeStyle = "rgb(0, 128, 255)";
+		// render_target.moveTo(block.x, block.y);
+		// render_target.lineTo(this.pos.x, this.pos.y);
+		// render_target.stroke();
+		// render_target.restore();
+
+		// get the corner vertexes :: we move counter clockwise and use the vector for the light to the vertex for the shadow
+		var last_edge = edge_status[0];
+		var corner_edges = [];
+		var s_e_vert = [];
+
+		for(var i = 0; i < block.verts.length; i++){
+			var this_edge = edge_status[(i+1)%block.verts.length]; //block.verts[i];
+
+			if(last_edge != this_edge){
+				corner_edges.push(new Vector2(block.verts[(i+1)%block.verts.length].x, block.verts[(i+1)%block.verts.length].y));
+				s_e_vert.push((i+1)%block.verts.length);
+				// last_edge = this_edge;
+			}
+			last_edge = this_edge;
+		}
+
+		// display the conection from light to corner edges, which shows where we get the vector for the shadow
+		// render_target.save();
+		// render_target.strokeStyle = "rgb(255, 255, 0)";
+		// render_target.beginPath();
+		// render_target.moveTo(this.pos.x, this.pos.y);
+		// render_target.lineTo(corner_edges[0].x, corner_edges[0].y);
+		// render_target.stroke();
+		// render_target.beginPath();
+		// render_target.moveTo(this.pos.x, this.pos.y);
+		// render_target.lineTo(corner_edges[1].x, corner_edges[1].y);
+		// render_target.stroke();
+		// render_target.restore();
+
+		// display the shadow
+		render_target.save();
+		render_target.beginPath();
+
+		// Amplify the vector
+		var t = new Vector2(block.verts[s_e_vert[0]].x - this.pos.x, block.verts[s_e_vert[0]].y - this.pos.y);
+		t.x *= 40; t.y *= 40;
+		var v = new Vector2(block.verts[s_e_vert[1]].x - this.pos.x, block.verts[s_e_vert[1]].y - this.pos.y);
+		v.x *= 40; v.y *= 40;
+
+		// this is to display the shadow behind the block with respect to the light
+
+		render_target.moveTo(block.verts[s_e_vert[0]].x, block.verts[s_e_vert[0]].y);
+
+		render_target.lineTo(t.x+block.verts[s_e_vert[0]].x, t.y+block.verts[s_e_vert[0]].y);
+		render_target.lineTo(v.x+block.verts[s_e_vert[1]].x, v.y+block.verts[s_e_vert[1]].y);
+
+		render_target.lineTo(block.verts[s_e_vert[1]].x, block.verts[s_e_vert[1]].y);
+		render_target.lineTo(block.verts[s_e_vert[0]].x, block.verts[s_e_vert[0]].y);
+
+		var radgrad = ctx.createRadialGradient(this.pos.x,this.pos.y, 0, this.pos.x, this.pos.y, 800);  
+		radgrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+		radgrad.addColorStop(0.4, 'rgba(16, 16, 16, 0.8)');
+		radgrad.addColorStop(0.6, 'rgba(20, 20, 20, 0.5)');
+		radgrad.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
+		render_target.fillStyle = radgrad;
+
+		// render_target.fillRect(this.pos.x-400, this.pos.y-400, 800, 800);
+
+		render_target.fill();
+		// render_target.strokeStyle = 'rgb(255, 255, 0)';
+		// render_target.stroke();
+		render_target.restore();
+
+
+	}
+
+	this.draw = function(render_target){
+		Error.checkType(this, "draw()", render_target, CanvasRenderingContext2D);
+
+		// render_target.fillStyle = "rgba(255, 255, 0, 1)";
+		// render_target.fillRect(this.pos.x - 5, this.pos.y - 5, 10, 10);
+
+		// fill with the gradient from this position
+
+		render_target.save();
+
+		var radgrad = ctx.createRadialGradient(this.pos.x,this.pos.y, 0, this.pos.x, this.pos.y, 50);  
+		radgrad.addColorStop(0, 'rgba(200, 200, 128, 1.0)');
+		radgrad.addColorStop(0.5, 'rgba(128, 128, 0, 0.5)');
+		radgrad.addColorStop(0.9, 'rgba(64, 64, 0, 0.0)');
+		radgrad.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
+		render_target.fillStyle = radgrad;
+		render_target.fillRect(this.pos.x-200, this.pos.y-200, 400, 400);
+
+		render_target.restore();
+
+	}
+}
+
+function Block(p){
+	this.verts = p.verts || []; // [v1, v2, v3, v4] -> clockwise
+	this.x = 0;
+	this.y = 0;
+
+	for(var i in p.verts){
+		this.x += p.verts[i].x;
+		this.y += p.verts[i].y;
+	}
+	this.x /= p.verts.length;
+	this.y /= p.verts.length;
+
+
+	this.draw = function(render_target){
+		Error.checkType(this, "draw()", render_target, CanvasRenderingContext2D);
+
+		render_target.save();
+		render_target.fillStyle = "rgba(32, 32, 150, 1.0)";
+		render_target.beginPath();
+
+		render_target.moveTo(this.verts[0].x, this.verts[0].y);
+
+		for(var i = 1; i < this.verts.length; i++){
+			render_target.lineTo(this.verts[i].x, this.verts[i].y);
+		}
+		render_target.lineTo(this.verts[0].x, this.verts[0].y);
+
+		render_target.fill();
+		render_target.restore();
+
+		// display block center
+		// render_target.fillRect(this.x-1, this.y-1, 2, 2);
+
+		// console.log(this.constructor.name);
+	}
+}
+
+window.onload = function(){
+	cvs = document.getElementById('c');
+	ctx = cvs.getContext('2d');
+	blocks = [];
+
+	// push our blocks into an array so we can iterate over them easily
+	blocks.push(
+		new Block({
+			verts: [
+				new Vector2(250, 250), 
+				new Vector2(300, 250), 
+				new Vector2(300, 300), 
+				new Vector2(250, 300), 
+				new Vector2(225, 275)
+			]
+		}) 
+	);
+
+	blocks.push(
+		new Block({
+			verts: [
+				new Vector2(100, 100), 
+				new Vector2(190, 120), 
+				new Vector2(165, 170)
+			]
+		}) 
+	);
+
+	blocks.push(
+		new Block({
+			verts: [
+				new Vector2(400, 150), 
+				new Vector2(500, 150), 
+				new Vector2(500, 250), 
+				new Vector2(400, 250)
+			]
+		})
+	);
+
+	l = new Light({pos: new Vector2(480, 100)});
+	var default_margin = 8;
+
+	cvs.onmousemove = function(e){
+		l.pos.x = e.clientX - document.body.scrollLeft - default_margin;
+		l.pos.y = e.clientY - document.body.scrollTop - default_margin;
+
+		ctx.clearRect(0,0,640,480);	
+
+		l.draw(ctx);
+		for(var i in blocks){
+			l.shine(blocks[i], ctx); // shine is the function used to shine the light ( or calculate the shadows and draw them)
+		}
+
+		// we want to draw the blocks over the shadows
+		for(var i in blocks){
+			blocks[i].draw(ctx); 
+		}
+
+	};
+
+}
+</script>
+</head>
+<body>
+	<canvas id='c' width='640' height='480'></canvas>
+</body>
+</html>
